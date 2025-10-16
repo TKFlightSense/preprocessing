@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Optional
+import difflib
 
+import pandas as pd
 import typer
 
 from .schema import LabelInstruction, ModelConfig
 from .dataset_io import load_labels_yaml, read_table, write_table
 from .labeler import Labeler
-from .prompts import dual_user_prompt, SYSTEM
+from .prompts import dual_user_prompt, segmentation_user_prompt, labels_only_prompt, SYSTEM
 from .llm_client import OpenAIClient
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
@@ -205,6 +207,196 @@ def run_dual_single(
             "label_1": ", ".join(l1),
             "label_2": ", ".join(l2),
         })
+
+    out_df = pd.DataFrame(rows, columns=["review", "label_1", "label_2"])
+    write_table(out_df, output)
+    typer.secho(f"Wrote {len(out_df)} rows to {output}", fg=typer.colors.GREEN)
+
+
+@app.command("classify")
+def classify(
+    input: Path = typer.Option(..., help="Input CSV/JSONL with first column 'review'"),
+    labels_file: Path = typer.Option(..., help="YAML with labels: [labels: ...]"),
+    output: Path = typer.Option(..., help="Output CSV/JSONL with columns: review,labels"),
+    model: Optional[str] = typer.Option(None, help="Model name override"),
+    provider: str = typer.Option("openai", help="LLM provider (only 'openai' supported)"),
+    temperature: float = typer.Option(0.0, help="Sampling temperature (default 0 for determinism)"),
+    top_p: float = typer.Option(1.0, help="Nucleus sampling top_p"),
+    seed: Optional[int] = typer.Option(None, help="Random seed (if provider supports)"),
+    max_rows: Optional[int] = typer.Option(None, help="Limit rows for a dry run"),
+):
+    """Simplified classification: review -> single label (labels-only output).
+
+    Reads the first column 'review' from the input and writes two columns: review,labels.
+    """
+    if provider != "openai":
+        raise typer.BadParameter("Currently only 'openai'-compatible provider is supported in classify mode")
+
+    labels = load_labels_yaml(labels_file)
+    allowed = labels
+    allowed_norm = {lbl.lower().strip(): lbl for lbl in allowed}
+
+    cfg = ModelConfig(provider=provider, model=model or "gpt-4o-mini")
+    cfg.temperature = temperature
+    cfg.top_p = top_p
+    cfg.seed = seed
+
+    client = OpenAIClient(model=cfg.model)
+
+    df = read_table(input)
+    # Ensure a 'review' column exists and is the first column
+    if "review" not in df.columns:
+        # If first column exists, rename it to 'review'
+        if len(df.columns) >= 1:
+            df = df.rename(columns={df.columns[0]: "review"})
+        else:
+            raise typer.BadParameter("Input file has no columns. Expected a 'review' column.")
+
+    it = df.itertuples(index=False)
+    if max_rows is not None:
+        it = list(it)[:max_rows]
+
+    rows = []
+    for row in it:
+        text = str(getattr(row, "review"))
+        up = labels_only_prompt(text, allowed)
+        res = client.chat(system="You return only a single label from the provided list.", user=up, temperature=cfg.temperature, top_p=cfg.top_p, seed=cfg.seed)
+        content = (res.content or "").strip()
+        # Strip code fences if any
+        if content.startswith("```"):
+            content = content.strip("`\n ")
+            if content.lower().startswith("json"):
+                content = content[4:].lstrip()
+        # Take first line only to be safe
+        content = content.splitlines()[0].strip()
+
+        # Match to allowed labels (case-insensitive, fuzzy fallback)
+        label = allowed_norm.get(content.lower())
+        if not label:
+            # Try fuzzy match
+            best = difflib.get_close_matches(content.lower(), list(allowed_norm.keys()), n=1, cutoff=0.6)
+            if best:
+                label = allowed_norm[best[0]]
+            else:
+                label = allowed[0]  # default to first label to avoid empty output
+
+        rows.append({"review": text, "labels": label})
+
+    out_df = pd.DataFrame(rows, columns=["review", "labels"])
+    write_table(out_df, output)
+    typer.secho(f"Wrote {len(out_df)} rows to {output}", fg=typer.colors.GREEN)
+
+
+@app.command("segment-dual")
+def segment_dual(
+    input: Path = typer.Option(..., help="Input CSV/JSONL"),
+    text_col: str = typer.Option("text", help="Column containing the review text"),
+    labels1_file: Path = typer.Option(..., help="YAML with primary labels (label_1)"),
+    labels2_file: Path = typer.Option(..., help="YAML with secondary labels (label_2)"),
+    output: Path = typer.Option(..., help="Output CSV/JSONL with segmented rows: review,label_1,label_2"),
+    model: Optional[str] = typer.Option(None, help="Model name override"),
+    provider: str = typer.Option("openai", help="LLM provider (only 'openai' supported)"),
+    temperature: float = typer.Option(None, help="Override sampling temperature"),
+    top_p: float = typer.Option(None, help="Override nucleus sampling top_p"),
+    seed: Optional[int] = typer.Option(None, help="Random seed for determinism (if provider supports)"),
+    max_rows: Optional[int] = typer.Option(None, help="Limit rows for a dry run"),
+):
+    """Segment reviews by primary label and also assign secondary label per segment.
+
+    Produces one row per segment with columns: review (exact span), label_1, label_2.
+    """
+    if provider != "openai":
+        raise typer.BadParameter("Currently only 'openai'-compatible provider is supported in segment-dual mode")
+
+    labels1 = load_labels_yaml(labels1_file)
+    labels2 = load_labels_yaml(labels2_file)
+    allowed1 = set(labels1)
+    allowed2 = set(labels2)
+
+    cfg = ModelConfig(provider=provider, model=model or "gpt-4o-mini")
+    if temperature is not None:
+        cfg.temperature = temperature
+    if top_p is not None:
+        cfg.top_p = top_p
+    cfg.seed = seed
+
+    client = OpenAIClient(model=cfg.model)
+
+    df = read_table(input)
+    if text_col not in df.columns:
+        raise typer.BadParameter(f"Text column '{text_col}' not found. Columns: {list(df.columns)}")
+
+    it = df.itertuples(index=False)
+    if max_rows is not None:
+        it = list(it)[:max_rows]
+
+    rows = []
+    for row in it:
+        full_text = str(getattr(row, text_col))
+        up = segmentation_user_prompt(full_text, labels1, labels2)
+        res = client.chat(system=SYSTEM, user=up, temperature=cfg.temperature, top_p=cfg.top_p, seed=cfg.seed)
+        content = res.content.strip()
+        if content.startswith("```"):
+            content = content.strip("`\n ")
+            if content.lower().startswith("json"):
+                content = content[4:].lstrip()
+
+        import json as _json
+        try:
+            data = _json.loads(content)
+        except Exception as e:
+            raise typer.BadParameter(f"Model returned non-JSON response: {content[:120]}... ({e})")
+
+        segs = data.get("segments") or []
+        if not isinstance(segs, list):
+            segs = []
+
+        n = len(full_text)
+        for s in segs:
+            try:
+                start = int(s.get("start"))
+                end = int(s.get("end"))
+                l1 = str(s.get("label_1")) if s.get("label_1") is not None else ""
+                l2 = str(s.get("label_2")) if s.get("label_2") is not None else ""
+            except Exception:
+                continue
+            # validate bounds and labels
+            if end <= start:
+                continue
+            if start < 0 or end > n:
+                # clamp safely
+                start = max(0, start)
+                end = min(n, end)
+                if end <= start:
+                    continue
+            if l1 not in allowed1 or l2 not in allowed2:
+                continue
+            snippet = full_text[start:end]
+            # Skip very short spans
+            if len(snippet.strip()) < 3:
+                continue
+            rows.append({"review": snippet, "label_1": l1, "label_2": l2})
+
+        # Fallback: if no segments returned, create one whole-text segment with best single labels via dual-single
+        if not rows:
+            up2 = dual_user_prompt(full_text, labels1, labels2, multi1=False, multi2=False)
+            res2 = client.chat(system=SYSTEM, user=up2, temperature=cfg.temperature, top_p=cfg.top_p, seed=cfg.seed)
+            c2 = res2.content.strip()
+            if c2.startswith("```"):
+                c2 = c2.strip("`\n ")
+                if c2.lower().startswith("json"):
+                    c2 = c2[4:].lstrip()
+            try:
+                d2 = _json.loads(c2)
+                l1s = d2.get("label_1") or []
+                l2s = d2.get("label_2") or []
+                l1_val = l1s[0] if isinstance(l1s, list) and l1s else ""
+                l2_val = l2s[0] if isinstance(l2s, list) and l2s else ""
+                if l1_val in allowed1 and l2_val in allowed2:
+                    rows.append({"review": full_text, "label_1": l1_val, "label_2": l2_val})
+            except Exception:
+                # ignore fallback errors
+                pass
 
     out_df = pd.DataFrame(rows, columns=["review", "label_1", "label_2"])
     write_table(out_df, output)

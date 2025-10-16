@@ -1,6 +1,6 @@
 # Labelicious
 
-Label unlabelled text with a list of candidate labels using a LLM API.
+Minimal, strict labeling for training data. Given a CSV whose first column is `review` and a `labels.yaml` file, it produces a new CSV with two columns: `review,labels`. The model returns only the label text to minimize token usage and cost.
 
 ## Install
 
@@ -10,57 +10,46 @@ pip install -e '.[dev]'
 cp .env.example .env  # set OPENAI_API_KEY
 ```
 
-## Run
+Environment (.env):
+- `OPENAI_API_KEY=...`
+- Optional: `OPENAI_BASE_URL=https://api.openai.com/v1`
+
+## Quickstart (single-label, labels-only output)
 
 ```bash
-labelicious run \
+labelicious classify \
   --input examples/sample_dataset.csv \
-  --text-col text \
   --labels-file examples/labels.yaml \
-  --output out.csv \
-  --no-multi-label
+  --output out.csv
 ```
 
-### Run Options
+- Input CSV: first column must be the review text (ideally named `review`). If it isn’t named, the first column is treated as `review` automatically.
+- Labels YAML: a small, curated list under the `labels:` key (keep the set focused for quality/cost). Example: `examples/labels.yaml`.
+- Output CSV: two columns with the original review and a single best label: `review,labels`.
 
-```bash
-labelicious run --input DATA.csv --text-col text \
-  --labels-file labels.yaml --output labeled.csv \
-  --provider openai --model gpt-4o-mini \
-  --multi-label false --temperature 0 \
-  --max-workers 8 --self-consistency 3
-```
+Why this is cost‑efficient
+- The prompt is strict and requests only the label string (no JSON, no rationale).
+- One call per row, one label per row — ideal for training a BERT classifier.
 
-### Input
+## Input formats
 
-CSV with a text column (configurable)
+- CSV (`.csv`): first column is used as `review`.
+- Labels YAML:
+  ```yaml
+  labels:
+    - Flight Delay / Cancellation
+    - Customer Service
+    - Baggage Issues
+  ```
 
-YALM labels file
+## Options
 
-## Dual-label output (review, label_1, label_2)
+- `--model gpt-4o-mini` (default) and other OpenAI‑compatible models
+- `--temperature 0 --top_p 1` for deterministic labeling (default in classify)
+- `--max-rows N` to test on a subset
 
-To label each review with two independent label sets (e.g., domain category and intent):
+## Output
 
-```bash
-labelicious run-dual \
-  --input examples/sample_dataset.csv \
-  --text-col text \
-  --labels1-file examples/airline_labels.yaml \
-  --labels2-file examples/sentiment_intent.yaml \
-  --output out_dual.csv \
-  --no-labels1-multi --no-labels2-multi
-```
-
-This writes a table with columns: `review,label_1,label_2`.
-
-Single LLM call per row (faster, cheaper):
-
-```bash
-labelicious run-dual-single \
-  --input examples/sample_dataset.csv \
-  --text-col text \
-  --labels1-file examples/airline_labels.yaml \
-  --labels2-file examples/sentiment_intent.yaml \
-  --output out_dual_single.csv \
-  --no-labels1-multi --no-labels2-multi
-```
+CSV with two columns:
+- `review`: unchanged input text
+- `labels`: the single best label, exactly as listed in `labels.yaml`
