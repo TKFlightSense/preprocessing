@@ -53,3 +53,16 @@ Why this is cost‑efficient
 CSV with two columns:
 - `review`: unchanged input text
 - `labels`: the single best label, exactly as listed in `labels.yaml`
+### Multi-label (optional)
+
+If a review clearly fits more than one label, you can enable a strict multi-label mode that requests up to 3 labels, returned as a single field separated by `|` (pipe). This avoids CSV parsing ambiguity from commas.
+
+```bash
+labelicious classify \
+  --input examples/sample_dataset.csv \
+  --labels-file examples/labels.yaml \
+  --output out_multi.csv \
+  --multi-label
+```
+
+The output still has two columns: `review,labels`. In multi-label mode, the `labels` field can contain one, two, or three labels separated by `|`, e.g., `baggage_issues | inflight_experience | customer_service`.

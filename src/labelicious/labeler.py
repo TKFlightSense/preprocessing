@@ -13,9 +13,10 @@ from .self_consistency import vote_single_label
 
 
 class Labeler:
-    def __init__(self, label_instr: LabelInstruction, model_cfg: ModelConfig):
+    def __init__(self, label_instr: LabelInstruction, model_cfg: ModelConfig, debug: bool = False):
         self.label_instr = label_instr
         self.model_cfg = model_cfg
+        self.debug = debug
         if model_cfg.provider == "openai":
             self.client = OpenAIClient(model=model_cfg.model)
         else:
@@ -43,6 +44,9 @@ class Labeler:
             seed=self.model_cfg.seed,
         )
         content = res.content.strip()
+        if self.debug:
+            print("[DEBUG][LLM][labeler] raw:")
+            print(content)
         # Handle accidental code fences
         if content.startswith("```"):
             content = content.strip("`\n ")

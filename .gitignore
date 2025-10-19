@@ -14,3 +14,5 @@ venv/
 .labelicious_cache/
 
 examples/
+
+datasets/

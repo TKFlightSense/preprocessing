@@ -6,15 +6,10 @@ Defaults:
 - Keeps only ASCII letters (A-Z a-z), digits (0-9), and spaces
 - Collapses multiple whitespace to a single space, strips leading/trailing spaces
 
-Options allow keeping common punctuation, or keeping ONLY periods.
-
-Usage:
-  python scripts/clean_reviews.py --input CLEAN_BA_AirlineReviews.csv --output CLEAN_BA_AirlineReviews.clean.csv
-
+Options allow keeping common punctuation.
 Optional flags:
   --column review                 # column name (default: review)
   --keep-punct                    # keep . , ! ? ; : ' " - ( ) characters
-  --only-dots                     # delete everything except '.' (periods)
   --inplace                       # overwrite input file in place
 """
 
@@ -29,7 +24,7 @@ from pathlib import Path
 import pandas as pd
 
 
-def clean_text(text: str, keep_punct: bool = False, only_dots: bool = False) -> str:
+def clean_text(text: str, keep_punct: bool = False) -> str:
     if text is None:
         return ""
     s = str(text)
@@ -37,16 +32,11 @@ def clean_text(text: str, keep_punct: bool = False, only_dots: bool = False) -> 
     s = unicodedata.normalize("NFKD", s)
     s = s.encode("ascii", "ignore").decode("ascii")
 
-    if only_dots:
-        # Keep only periods. Remove everything else.
-        s = re.sub(r"[^.]+", "", s)
-        return s
-
     if keep_punct:
         # Keep basic punctuation . , ! ? ; : ' " - ( )
-        s = re.sub(r"[^A-Za-z0-9\s\.,!\?;:'\"\-\(\)]", "", s)
+        s = re.sub(r"[^A-Za-z0-9\s\,!\?;:'\"\-\(\)]", "", s)
     else:
-        # Keep only letters, digits, whitespace
+       # Keep only letters, digits, whitespace
         s = re.sub(r"[^A-Za-z0-9\s]", "", s)
 
     # Collapse whitespace and trim
@@ -60,7 +50,6 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--output", help="Output CSV path (omit with --inplace)")
     p.add_argument("--column", default="review", help="Column to clean (default: review)")
     p.add_argument("--keep-punct", action="store_true", help="Keep basic punctuation . , ! ? ; : ' \" - ( )")
-    p.add_argument("--only-dots", action="store_true", help="Delete everything except '.' (period) characters")
     p.add_argument("--inplace", action="store_true", help="Overwrite input file in place")
     args = p.parse_args(argv)
 
@@ -84,9 +73,7 @@ def main(argv: list[str] | None = None) -> int:
             or 2
         )
 
-    df[args.column] = df[args.column].astype(str).map(
-        lambda x: clean_text(x, keep_punct=args.keep_punct, only_dots=args.only_dots)
-    )
+    df[args.column] = df[args.column].astype(str).map(lambda x: clean_text(x, keep_punct=args.keep_punct))
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out_path, index=False)

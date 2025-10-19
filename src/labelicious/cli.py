@@ -10,7 +10,7 @@ import typer
 from .schema import LabelInstruction, ModelConfig
 from .dataset_io import load_labels_yaml, read_table, write_table
 from .labeler import Labeler
-from .prompts import dual_user_prompt, segmentation_user_prompt, labels_only_prompt, SYSTEM
+from .prompts import labels_only_prompt, labels_only_prompt_multi, SYSTEM
 from .llm_client import OpenAIClient
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
@@ -40,6 +40,7 @@ def run(
     self_consistency: int = typer.Option(1, help="# independent samples for voting/aggregation"),
     seed: Optional[int] = typer.Option(None, help="Random seed for determinism (if provider supports)"),
     max_rows: Optional[int] = typer.Option(None, help="Limit rows for a dry run"),
+    debug: bool = typer.Option(False, help="Print raw LLM outputs for debugging"),
 ):
     """
     Label a dataset with a provided label set using an LLM.
@@ -55,7 +56,7 @@ def run(
     cfg.seed = seed
 
     df = read_table(input)
-    labeler = Labeler(li, cfg)
+    labeler = Labeler(li, cfg, debug=debug)
     out_df = labeler.label_dataframe(
         df, text_col=text_col, self_consistency=self_consistency, max_rows=max_rows
     )
@@ -80,6 +81,7 @@ def run_dual(
     max_rows: Optional[int] = typer.Option(None, help="Limit rows for a dry run"),
     labels1_multi: bool = typer.Option(False, help="Allow multiple labels for label_1"),
     labels2_multi: bool = typer.Option(False, help="Allow multiple labels for label_2"),
+    debug: bool = typer.Option(False, help="Print raw LLM outputs for debugging"),
 ):
     """Label each review into two label sets and write review,label_1,label_2."""
     # Load label sets
@@ -100,8 +102,8 @@ def run_dual(
     if text_col not in df.columns:
         raise typer.BadParameter(f"Text column '{text_col}' not found. Columns: {list(df.columns)}")
 
-    labeler1 = Labeler(li1, cfg)
-    labeler2 = Labeler(li2, cfg)
+    labeler1 = Labeler(li1, cfg, debug=debug)
+    labeler2 = Labeler(li2, cfg, debug=debug)
 
     # Apply optional row limit
     it = df.itertuples(index=False)
@@ -144,6 +146,7 @@ def run_dual_single(
     max_rows: Optional[int] = typer.Option(None, help="Limit rows for a dry run"),
     labels1_multi: bool = typer.Option(False, help="Allow multiple labels for label_1"),
     labels2_multi: bool = typer.Option(False, help="Allow multiple labels for label_2"),
+    debug: bool = typer.Option(False, help="Print raw LLM outputs for debugging"),
 ):
     """Label each review into two label sets using a single LLM call per row."""
     if provider != "openai":
@@ -175,6 +178,9 @@ def run_dual_single(
         text = str(getattr(row, text_col))
         up = dual_user_prompt(text, labels1, labels2, labels1_multi, labels2_multi)
         res = client.chat(system=SYSTEM, user=up, temperature=cfg.temperature, top_p=cfg.top_p, seed=cfg.seed)
+        if debug:
+            print("[DEBUG][LLM][dual-single] raw:")
+            print(res.content)
         content = res.content.strip()
         if content.startswith("```"):
             content = content.strip("`\n ")
@@ -224,6 +230,8 @@ def classify(
     top_p: float = typer.Option(1.0, help="Nucleus sampling top_p"),
     seed: Optional[int] = typer.Option(None, help="Random seed (if provider supports)"),
     max_rows: Optional[int] = typer.Option(None, help="Limit rows for a dry run"),
+    multi_label: bool = typer.Option(False, help="Allow multiple labels (comma-separated, up to 3)"),
+    debug: bool = typer.Option(False, help="Print raw LLM outputs for debugging"),
 ):
     """Simplified classification: review -> single label (labels-only output).
 
@@ -259,8 +267,11 @@ def classify(
     rows = []
     for row in it:
         text = str(getattr(row, "review"))
-        up = labels_only_prompt(text, allowed)
-        res = client.chat(system="You return only a single label from the provided list.", user=up, temperature=cfg.temperature, top_p=cfg.top_p, seed=cfg.seed)
+        up = labels_only_prompt_multi(text, allowed) if multi_label else labels_only_prompt(text, allowed)
+        res = client.chat(system=SYSTEM, user=up, temperature=cfg.temperature, top_p=cfg.top_p, seed=cfg.seed)
+        if debug:
+            print("[DEBUG][LLM][classify] raw:")
+            print(res.content)
         content = (res.content or "").strip()
         # Strip code fences if any
         if content.startswith("```"):
@@ -270,17 +281,34 @@ def classify(
         # Take first line only to be safe
         content = content.splitlines()[0].strip()
 
-        # Match to allowed labels (case-insensitive, fuzzy fallback)
-        label = allowed_norm.get(content.lower())
-        if not label:
-            # Try fuzzy match
-            best = difflib.get_close_matches(content.lower(), list(allowed_norm.keys()), n=1, cutoff=0.6)
-            if best:
-                label = allowed_norm[best[0]]
-            else:
-                label = allowed[0]  # default to first label to avoid empty output
+        def map_one(tok: str) -> str | None:
+            t = tok.strip().strip('"\'')
+            if not t:
+                return None
+            lab = allowed_norm.get(t.lower())
+            if lab:
+                return lab
+            best = difflib.get_close_matches(t.lower(), list(allowed_norm.keys()), n=1, cutoff=0.6)
+            return allowed_norm[best[0]] if best else None
 
-        rows.append({"review": text, "labels": label})
+        labels_out: list[str] = []
+        if multi_label:
+            # Split on commas or newlines
+            parts = [p for p in [s.strip() for s in content.replace("\n", ",").split(",")] if p]
+            for p in parts:
+                m = map_one(p)
+                if m and m not in labels_out:
+                    labels_out.append(m)
+                if len(labels_out) >= 3:
+                    break
+            if not labels_out:
+                # fallback to first label
+                labels_out = [allowed[0]]
+            rows.append({"review": text, "labels": " | ".join(labels_out)})
+        else:
+            m = map_one(content)
+            label = m if m else allowed[0]
+            rows.append({"review": text, "labels": label})
 
     out_df = pd.DataFrame(rows, columns=["review", "labels"])
     write_table(out_df, output)
@@ -300,6 +328,7 @@ def segment_dual(
     top_p: float = typer.Option(None, help="Override nucleus sampling top_p"),
     seed: Optional[int] = typer.Option(None, help="Random seed for determinism (if provider supports)"),
     max_rows: Optional[int] = typer.Option(None, help="Limit rows for a dry run"),
+    debug: bool = typer.Option(False, help="Print raw LLM outputs for debugging"),
 ):
     """Segment reviews by primary label and also assign secondary label per segment.
 
@@ -335,6 +364,9 @@ def segment_dual(
         full_text = str(getattr(row, text_col))
         up = segmentation_user_prompt(full_text, labels1, labels2)
         res = client.chat(system=SYSTEM, user=up, temperature=cfg.temperature, top_p=cfg.top_p, seed=cfg.seed)
+        if debug:
+            print("[DEBUG][LLM][segment] raw:")
+            print(res.content)
         content = res.content.strip()
         if content.startswith("```"):
             content = content.strip("`\n ")
@@ -381,6 +413,9 @@ def segment_dual(
         if not rows:
             up2 = dual_user_prompt(full_text, labels1, labels2, multi1=False, multi2=False)
             res2 = client.chat(system=SYSTEM, user=up2, temperature=cfg.temperature, top_p=cfg.top_p, seed=cfg.seed)
+            if debug:
+                print("[DEBUG][LLM][segment-fallback] raw:")
+                print(res2.content)
             c2 = res2.content.strip()
             if c2.startswith("```"):
                 c2 = c2.strip("`\n ")
