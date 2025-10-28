@@ -1,4 +1,4 @@
-from labelicious.schema import LabelInstruction, LLMResponse
+from preprocessing.schema import LabelInstruction, LLMResponse
 
 
 def test_label_instruction_bounds():
