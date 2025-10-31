@@ -17,7 +17,7 @@ Environment (.env):
 ## Quickstart (single-label, labels-only output)
 
 ```bash
-labelicious classify \
+preprocessing classify \
   --input examples/sample_dataset.csv \
   --labels-file examples/labels.yaml \
   --output out.csv
