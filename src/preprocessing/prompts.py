@@ -9,7 +9,9 @@ SYSTEM = dedent(
 )
 
 
-def user_prompt(text: str, labels: List[str], multi_label: bool, require_confidence: bool) -> str:
+def user_prompt(
+    text: str, labels: List[str], multi_label: bool, require_confidence: bool
+) -> str:
     return dedent(
         f"""
         Text to label:

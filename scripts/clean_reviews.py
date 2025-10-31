@@ -37,14 +37,23 @@ def clean_text(text: str, keep_punct: bool = False) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Clean the review column in a CSV by removing all punctuation except periods ('.')."
     )
     parser.add_argument("--input", required=True, help="Path to input CSV file.")
-    parser.add_argument("--output", help="Path to output CSV file (omit with --inplace).")
-    parser.add_argument("--column", default="review", help="Name of the column to clean (default: 'review').")
-    parser.add_argument("--inplace", action="store_true", help="Overwrite the input file directly.")
+    parser.add_argument(
+        "--output", help="Path to output CSV file (omit with --inplace)."
+    )
+    parser.add_argument(
+        "--column",
+        default="review",
+        help="Name of the column to clean (default: 'review').",
+    )
+    parser.add_argument(
+        "--inplace", action="store_true", help="Overwrite the input file directly."
+    )
 
     args = parser.parse_args(argv)
 
@@ -63,7 +72,10 @@ def main(argv: list[str] | None = None) -> int:
 
     df = pd.read_csv(in_path)
     if args.column not in df.columns:
-        print(f"[ERR] Column '{args.column}' not found. Available: {list(df.columns)}", file=sys.stderr)
+        print(
+            f"[ERR] Column '{args.column}' not found. Available: {list(df.columns)}",
+            file=sys.stderr,
+        )
         return 2
 
     df[args.column] = df[args.column].astype(str).map(clean_text)
@@ -72,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
     df.to_csv(out_path, index=False)
     print(f"[OK] Wrote cleaned file: {out_path}")
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

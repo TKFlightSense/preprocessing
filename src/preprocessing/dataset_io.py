@@ -1,7 +1,6 @@
 from __future__ import annotations
 import json
 from pathlib import Path
-from typing import Iterable, List
 import pandas as pd
 import yaml
 
@@ -20,7 +19,11 @@ def read_table(path: str | Path) -> pd.DataFrame:
     if p.suffix.lower() in {".csv"}:
         return pd.read_csv(p)
     if p.suffix.lower() in {".jsonl", ".ndjson"}:
-        rows = [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines() if line.strip()]
+        rows = [
+            json.loads(line)
+            for line in p.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
         return pd.DataFrame(rows)
     raise ValueError("Unsupported input format. Use .csv or .jsonl")
 

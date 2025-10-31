@@ -13,7 +13,9 @@ from .self_consistency import vote_single_label
 
 
 class Labeler:
-    def __init__(self, label_instr: LabelInstruction, model_cfg: ModelConfig, debug: bool = False):
+    def __init__(
+        self, label_instr: LabelInstruction, model_cfg: ModelConfig, debug: bool = False
+    ):
         self.label_instr = label_instr
         self.model_cfg = model_cfg
         self.debug = debug
@@ -24,7 +26,9 @@ class Labeler:
         # simple in-memory cache keyed by prompt hash
         self.cache: Dict[str, Dict[str, Any]] = {}
 
-    def _ask_once(self, text: str) -> Tuple[LLMResponse, Dict[str, Any], str, Dict[str, Any]]:
+    def _ask_once(
+        self, text: str
+    ) -> Tuple[LLMResponse, Dict[str, Any], str, Dict[str, Any]]:
         up = user_prompt(
             text,
             self.label_instr.labels,
@@ -84,7 +88,9 @@ class Labeler:
                 voted = vote_single_label([r.predicted_labels for r in runs])
                 # pick the first run that matches the vote to keep its confidences/rationale
                 chosen_idx = next(
-                    i for i, r in enumerate(runs) if r.predicted_labels and r.predicted_labels[0] == voted
+                    i
+                    for i, r in enumerate(runs)
+                    if r.predicted_labels and r.predicted_labels[0] == voted
                 )
                 final = runs[chosen_idx]
                 raw0 = raws[chosen_idx]
@@ -99,7 +105,9 @@ class Labeler:
                 final = runs[chosen_idx]
                 raw0 = raws[chosen_idx]
 
-        return LabeledRow(idx=-1, text=text, response=final, raw_json=raw0, prompt_hash=ph)
+        return LabeledRow(
+            idx=-1, text=text, response=final, raw_json=raw0, prompt_hash=ph
+        )
 
     def label_dataframe(
         self,
@@ -109,7 +117,9 @@ class Labeler:
         max_rows: int | None = None,
     ) -> pd.DataFrame:
         if text_col not in df.columns:
-            raise ValueError(f"Text column '{text_col}' not found in dataset. Have {list(df.columns)}")
+            raise ValueError(
+                f"Text column '{text_col}' not found in dataset. Have {list(df.columns)}"
+            )
 
         it = df.itertuples(index=True)
         if max_rows is not None:

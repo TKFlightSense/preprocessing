@@ -37,8 +37,12 @@ def run(
     top_p: float = typer.Option(None, help="Override nucleus sampling top_p"),
     model: Optional[str] = typer.Option(None, help="Model name override"),
     provider: str = typer.Option("openai", help="LLM provider"),
-    self_consistency: int = typer.Option(1, help="# independent samples for voting/aggregation"),
-    seed: Optional[int] = typer.Option(None, help="Random seed for determinism (if provider supports)"),
+    self_consistency: int = typer.Option(
+        1, help="# independent samples for voting/aggregation"
+    ),
+    seed: Optional[int] = typer.Option(
+        None, help="Random seed for determinism (if provider supports)"
+    ),
     max_rows: Optional[int] = typer.Option(None, help="Limit rows for a dry run"),
     debug: bool = typer.Option(False, help="Print raw LLM outputs for debugging"),
 ):
@@ -46,7 +50,9 @@ def run(
     Label a dataset with a provided label set using an LLM.
     """
     labels = load_labels_yaml(labels_file)
-    li = LabelInstruction(labels=labels, multi_label=multi_label, require_confidence=True)
+    li = LabelInstruction(
+        labels=labels, multi_label=multi_label, require_confidence=True
+    )
 
     cfg = ModelConfig(provider=provider, model=model or "gpt-4o-mini")
     if temperature is not None:
@@ -71,13 +77,19 @@ def run_dual(
     text_col: str = typer.Option("text", help="Column containing the review text"),
     labels1_file: Path = typer.Option(..., help="YAML with primary labels (label_1)"),
     labels2_file: Path = typer.Option(..., help="YAML with secondary labels (label_2)"),
-    output: Path = typer.Option(..., help="Output CSV/JSONL with columns: review,label_1,label_2"),
+    output: Path = typer.Option(
+        ..., help="Output CSV/JSONL with columns: review,label_1,label_2"
+    ),
     model: Optional[str] = typer.Option(None, help="Model name override"),
     provider: str = typer.Option("openai", help="LLM provider"),
     temperature: float = typer.Option(None, help="Override sampling temperature"),
     top_p: float = typer.Option(None, help="Override nucleus sampling top_p"),
-    self_consistency: int = typer.Option(1, help="# independent samples for voting/aggregation"),
-    seed: Optional[int] = typer.Option(None, help="Random seed for determinism (if provider supports)"),
+    self_consistency: int = typer.Option(
+        1, help="# independent samples for voting/aggregation"
+    ),
+    seed: Optional[int] = typer.Option(
+        None, help="Random seed for determinism (if provider supports)"
+    ),
     max_rows: Optional[int] = typer.Option(None, help="Limit rows for a dry run"),
     labels1_multi: bool = typer.Option(False, help="Allow multiple labels for label_1"),
     labels2_multi: bool = typer.Option(False, help="Allow multiple labels for label_2"),
@@ -88,8 +100,12 @@ def run_dual(
     labels1 = load_labels_yaml(labels1_file)
     labels2 = load_labels_yaml(labels2_file)
 
-    li1 = LabelInstruction(labels=labels1, multi_label=labels1_multi, require_confidence=False)
-    li2 = LabelInstruction(labels=labels2, multi_label=labels2_multi, require_confidence=False)
+    li1 = LabelInstruction(
+        labels=labels1, multi_label=labels1_multi, require_confidence=False
+    )
+    li2 = LabelInstruction(
+        labels=labels2, multi_label=labels2_multi, require_confidence=False
+    )
 
     cfg = ModelConfig(provider=provider, model=model or "gpt-4o-mini")
     if temperature is not None:
@@ -100,7 +116,9 @@ def run_dual(
 
     df = read_table(input)
     if text_col not in df.columns:
-        raise typer.BadParameter(f"Text column '{text_col}' not found. Columns: {list(df.columns)}")
+        raise typer.BadParameter(
+            f"Text column '{text_col}' not found. Columns: {list(df.columns)}"
+        )
 
     labeler1 = Labeler(li1, cfg, debug=debug)
     labeler2 = Labeler(li2, cfg, debug=debug)
@@ -120,11 +138,13 @@ def run_dual(
             labs = r.response.predicted_labels or []
             return ", ".join(labs) if labs else ""
 
-        rows.append({
-            "review": text,
-            "label_1": to_cell(res1),
-            "label_2": to_cell(res2),
-        })
+        rows.append(
+            {
+                "review": text,
+                "label_1": to_cell(res1),
+                "label_2": to_cell(res2),
+            }
+        )
 
     out_df = pd.DataFrame(rows, columns=["review", "label_1", "label_2"])
     write_table(out_df, output)
@@ -137,12 +157,18 @@ def run_dual_single(
     text_col: str = typer.Option("text", help="Column containing the review text"),
     labels1_file: Path = typer.Option(..., help="YAML with primary labels (label_1)"),
     labels2_file: Path = typer.Option(..., help="YAML with secondary labels (label_2)"),
-    output: Path = typer.Option(..., help="Output CSV/JSONL with columns: review,label_1,label_2"),
+    output: Path = typer.Option(
+        ..., help="Output CSV/JSONL with columns: review,label_1,label_2"
+    ),
     model: Optional[str] = typer.Option(None, help="Model name override"),
-    provider: str = typer.Option("openai", help="LLM provider (only 'openai' supported)"),
+    provider: str = typer.Option(
+        "openai", help="LLM provider (only 'openai' supported)"
+    ),
     temperature: float = typer.Option(None, help="Override sampling temperature"),
     top_p: float = typer.Option(None, help="Override nucleus sampling top_p"),
-    seed: Optional[int] = typer.Option(None, help="Random seed for determinism (if provider supports)"),
+    seed: Optional[int] = typer.Option(
+        None, help="Random seed for determinism (if provider supports)"
+    ),
     max_rows: Optional[int] = typer.Option(None, help="Limit rows for a dry run"),
     labels1_multi: bool = typer.Option(False, help="Allow multiple labels for label_1"),
     labels2_multi: bool = typer.Option(False, help="Allow multiple labels for label_2"),
@@ -150,7 +176,9 @@ def run_dual_single(
 ):
     """Label each review into two label sets using a single LLM call per row."""
     if provider != "openai":
-        raise typer.BadParameter("Currently only 'openai'-compatible provider is supported in single-call mode")
+        raise typer.BadParameter(
+            "Currently only 'openai'-compatible provider is supported in single-call mode"
+        )
 
     labels1 = load_labels_yaml(labels1_file)
     labels2 = load_labels_yaml(labels2_file)
@@ -167,7 +195,9 @@ def run_dual_single(
 
     df = read_table(input)
     if text_col not in df.columns:
-        raise typer.BadParameter(f"Text column '{text_col}' not found. Columns: {list(df.columns)}")
+        raise typer.BadParameter(
+            f"Text column '{text_col}' not found. Columns: {list(df.columns)}"
+        )
 
     it = df.itertuples(index=False)
     if max_rows is not None:
@@ -177,7 +207,13 @@ def run_dual_single(
     for row in it:
         text = str(getattr(row, text_col))
         up = dual_user_prompt(text, labels1, labels2, labels1_multi, labels2_multi)
-        res = client.chat(system=SYSTEM, user=up, temperature=cfg.temperature, top_p=cfg.top_p, seed=cfg.seed)
+        res = client.chat(
+            system=SYSTEM,
+            user=up,
+            temperature=cfg.temperature,
+            top_p=cfg.top_p,
+            seed=cfg.seed,
+        )
         if debug:
             print("[DEBUG][LLM][dual-single] raw:")
             print(res.content)
@@ -189,10 +225,13 @@ def run_dual_single(
 
         # Parse JSON and coerce shapes
         import json as _json
+
         try:
             data = _json.loads(content)
         except Exception as e:
-            raise typer.BadParameter(f"Model returned non-JSON response: {content[:120]}... ({e})")
+            raise typer.BadParameter(
+                f"Model returned non-JSON response: {content[:120]}... ({e})"
+            )
 
         def to_list(val):
             if val is None:
@@ -208,11 +247,13 @@ def run_dual_single(
         if not labels2_multi and l2:
             l2 = [l2[0]]
 
-        rows.append({
-            "review": text,
-            "label_1": ", ".join(l1),
-            "label_2": ", ".join(l2),
-        })
+        rows.append(
+            {
+                "review": text,
+                "label_1": ", ".join(l1),
+                "label_2": ", ".join(l2),
+            }
+        )
 
     out_df = pd.DataFrame(rows, columns=["review", "label_1", "label_2"])
     write_table(out_df, output)
@@ -223,14 +264,22 @@ def run_dual_single(
 def classify(
     input: Path = typer.Option(..., help="Input CSV/JSONL with first column 'review'"),
     labels_file: Path = typer.Option(..., help="YAML with labels: [labels: ...]"),
-    output: Path = typer.Option(..., help="Output CSV/JSONL with columns: review,labels"),
+    output: Path = typer.Option(
+        ..., help="Output CSV/JSONL with columns: review,labels"
+    ),
     model: Optional[str] = typer.Option(None, help="Model name override"),
-    provider: str = typer.Option("openai", help="LLM provider (only 'openai' supported)"),
-    temperature: float = typer.Option(0.0, help="Sampling temperature (default 0 for determinism)"),
+    provider: str = typer.Option(
+        "openai", help="LLM provider (only 'openai' supported)"
+    ),
+    temperature: float = typer.Option(
+        0.0, help="Sampling temperature (default 0 for determinism)"
+    ),
     top_p: float = typer.Option(1.0, help="Nucleus sampling top_p"),
     seed: Optional[int] = typer.Option(None, help="Random seed (if provider supports)"),
     max_rows: Optional[int] = typer.Option(None, help="Limit rows for a dry run"),
-    multi_label: bool = typer.Option(False, help="Allow multiple labels (comma-separated, up to 3)"),
+    multi_label: bool = typer.Option(
+        False, help="Allow multiple labels (comma-separated, up to 3)"
+    ),
     debug: bool = typer.Option(False, help="Print raw LLM outputs for debugging"),
 ):
     """Simplified classification: review -> single label (labels-only output).
@@ -238,7 +287,9 @@ def classify(
     Reads the first column 'review' from the input and writes two columns: review,labels.
     """
     if provider != "openai":
-        raise typer.BadParameter("Currently only 'openai'-compatible provider is supported in classify mode")
+        raise typer.BadParameter(
+            "Currently only 'openai'-compatible provider is supported in classify mode"
+        )
 
     labels = load_labels_yaml(labels_file)
     allowed = labels
@@ -258,7 +309,9 @@ def classify(
         if len(df.columns) >= 1:
             df = df.rename(columns={df.columns[0]: "review"})
         else:
-            raise typer.BadParameter("Input file has no columns. Expected a 'review' column.")
+            raise typer.BadParameter(
+                "Input file has no columns. Expected a 'review' column."
+            )
 
     it = df.itertuples(index=False)
     if max_rows is not None:
@@ -267,8 +320,18 @@ def classify(
     rows = []
     for row in it:
         text = str(getattr(row, "review"))
-        up = labels_only_prompt_multi(text, allowed) if multi_label else labels_only_prompt(text, allowed)
-        res = client.chat(system=SYSTEM, user=up, temperature=cfg.temperature, top_p=cfg.top_p, seed=cfg.seed)
+        up = (
+            labels_only_prompt_multi(text, allowed)
+            if multi_label
+            else labels_only_prompt(text, allowed)
+        )
+        res = client.chat(
+            system=SYSTEM,
+            user=up,
+            temperature=cfg.temperature,
+            top_p=cfg.top_p,
+            seed=cfg.seed,
+        )
         if debug:
             print("[DEBUG][LLM][classify] raw:")
             print(res.content)
@@ -282,19 +345,25 @@ def classify(
         content = content.splitlines()[0].strip()
 
         def map_one(tok: str) -> str | None:
-            t = tok.strip().strip('"\'')
+            t = tok.strip().strip("\"'")
             if not t:
                 return None
             lab = allowed_norm.get(t.lower())
             if lab:
                 return lab
-            best = difflib.get_close_matches(t.lower(), list(allowed_norm.keys()), n=1, cutoff=0.6)
+            best = difflib.get_close_matches(
+                t.lower(), list(allowed_norm.keys()), n=1, cutoff=0.6
+            )
             return allowed_norm[best[0]] if best else None
 
         labels_out: list[str] = []
         if multi_label:
             # Split on commas or newlines
-            parts = [p for p in [s.strip() for s in content.replace("\n", ",").split(",")] if p]
+            parts = [
+                p
+                for p in [s.strip() for s in content.replace("\n", ",").split(",")]
+                if p
+            ]
             for p in parts:
                 m = map_one(p)
                 if m and m not in labels_out:
@@ -321,12 +390,18 @@ def segment_dual(
     text_col: str = typer.Option("text", help="Column containing the review text"),
     labels1_file: Path = typer.Option(..., help="YAML with primary labels (label_1)"),
     labels2_file: Path = typer.Option(..., help="YAML with secondary labels (label_2)"),
-    output: Path = typer.Option(..., help="Output CSV/JSONL with segmented rows: review,label_1,label_2"),
+    output: Path = typer.Option(
+        ..., help="Output CSV/JSONL with segmented rows: review,label_1,label_2"
+    ),
     model: Optional[str] = typer.Option(None, help="Model name override"),
-    provider: str = typer.Option("openai", help="LLM provider (only 'openai' supported)"),
+    provider: str = typer.Option(
+        "openai", help="LLM provider (only 'openai' supported)"
+    ),
     temperature: float = typer.Option(None, help="Override sampling temperature"),
     top_p: float = typer.Option(None, help="Override nucleus sampling top_p"),
-    seed: Optional[int] = typer.Option(None, help="Random seed for determinism (if provider supports)"),
+    seed: Optional[int] = typer.Option(
+        None, help="Random seed for determinism (if provider supports)"
+    ),
     max_rows: Optional[int] = typer.Option(None, help="Limit rows for a dry run"),
     debug: bool = typer.Option(False, help="Print raw LLM outputs for debugging"),
 ):
@@ -335,7 +410,9 @@ def segment_dual(
     Produces one row per segment with columns: review (exact span), label_1, label_2.
     """
     if provider != "openai":
-        raise typer.BadParameter("Currently only 'openai'-compatible provider is supported in segment-dual mode")
+        raise typer.BadParameter(
+            "Currently only 'openai'-compatible provider is supported in segment-dual mode"
+        )
 
     labels1 = load_labels_yaml(labels1_file)
     labels2 = load_labels_yaml(labels2_file)
@@ -353,7 +430,9 @@ def segment_dual(
 
     df = read_table(input)
     if text_col not in df.columns:
-        raise typer.BadParameter(f"Text column '{text_col}' not found. Columns: {list(df.columns)}")
+        raise typer.BadParameter(
+            f"Text column '{text_col}' not found. Columns: {list(df.columns)}"
+        )
 
     it = df.itertuples(index=False)
     if max_rows is not None:
@@ -363,7 +442,13 @@ def segment_dual(
     for row in it:
         full_text = str(getattr(row, text_col))
         up = segmentation_user_prompt(full_text, labels1, labels2)
-        res = client.chat(system=SYSTEM, user=up, temperature=cfg.temperature, top_p=cfg.top_p, seed=cfg.seed)
+        res = client.chat(
+            system=SYSTEM,
+            user=up,
+            temperature=cfg.temperature,
+            top_p=cfg.top_p,
+            seed=cfg.seed,
+        )
         if debug:
             print("[DEBUG][LLM][segment] raw:")
             print(res.content)
@@ -374,10 +459,13 @@ def segment_dual(
                 content = content[4:].lstrip()
 
         import json as _json
+
         try:
             data = _json.loads(content)
         except Exception as e:
-            raise typer.BadParameter(f"Model returned non-JSON response: {content[:120]}... ({e})")
+            raise typer.BadParameter(
+                f"Model returned non-JSON response: {content[:120]}... ({e})"
+            )
 
         segs = data.get("segments") or []
         if not isinstance(segs, list):
@@ -411,8 +499,16 @@ def segment_dual(
 
         # Fallback: if no segments returned, create one whole-text segment with best single labels via dual-single
         if not rows:
-            up2 = dual_user_prompt(full_text, labels1, labels2, multi1=False, multi2=False)
-            res2 = client.chat(system=SYSTEM, user=up2, temperature=cfg.temperature, top_p=cfg.top_p, seed=cfg.seed)
+            up2 = dual_user_prompt(
+                full_text, labels1, labels2, multi1=False, multi2=False
+            )
+            res2 = client.chat(
+                system=SYSTEM,
+                user=up2,
+                temperature=cfg.temperature,
+                top_p=cfg.top_p,
+                seed=cfg.seed,
+            )
             if debug:
                 print("[DEBUG][LLM][segment-fallback] raw:")
                 print(res2.content)
@@ -428,7 +524,9 @@ def segment_dual(
                 l1_val = l1s[0] if isinstance(l1s, list) and l1s else ""
                 l2_val = l2s[0] if isinstance(l2s, list) and l2s else ""
                 if l1_val in allowed1 and l2_val in allowed2:
-                    rows.append({"review": full_text, "label_1": l1_val, "label_2": l2_val})
+                    rows.append(
+                        {"review": full_text, "label_1": l1_val, "label_2": l2_val}
+                    )
             except Exception:
                 # ignore fallback errors
                 pass
