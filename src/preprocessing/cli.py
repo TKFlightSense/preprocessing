@@ -54,7 +54,7 @@ def run(
         labels=labels, multi_label=multi_label, require_confidence=True
     )
 
-    cfg = ModelConfig(provider=provider, model=model or "gpt-4o-mini")
+    cfg = ModelConfig(provider=provider, model=model or "gpt-5-mini")
     if temperature is not None:
         cfg.temperature = temperature
     if top_p is not None:
@@ -107,7 +107,7 @@ def run_dual(
         labels=labels2, multi_label=labels2_multi, require_confidence=False
     )
 
-    cfg = ModelConfig(provider=provider, model=model or "gpt-4o-mini")
+    cfg = ModelConfig(provider=provider, model=model or "gpt-5-mini")
     if temperature is not None:
         cfg.temperature = temperature
     if top_p is not None:
@@ -184,7 +184,7 @@ def run_dual_single(
     labels2 = load_labels_yaml(labels2_file)
 
     # Model config and client
-    cfg = ModelConfig(provider=provider, model=model or "gpt-4o-mini")
+    cfg = ModelConfig(provider=provider, model=model or "gpt-5-mini")
     if temperature is not None:
         cfg.temperature = temperature
     if top_p is not None:
@@ -295,7 +295,7 @@ def classify(
     allowed = labels
     allowed_norm = {lbl.lower().strip(): lbl for lbl in allowed}
 
-    cfg = ModelConfig(provider=provider, model=model or "gpt-4o-mini")
+    cfg = ModelConfig(provider=provider, model=model or "gpt-5-mini")
     cfg.temperature = temperature
     cfg.top_p = top_p
     cfg.seed = seed
@@ -419,7 +419,7 @@ def segment_dual(
     allowed1 = set(labels1)
     allowed2 = set(labels2)
 
-    cfg = ModelConfig(provider=provider, model=model or "gpt-4o-mini")
+    cfg = ModelConfig(provider=provider, model=model or "gpt-5-mini")
     if temperature is not None:
         cfg.temperature = temperature
     if top_p is not None:
