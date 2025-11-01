@@ -10,7 +10,7 @@ class LabelInstruction(BaseModel):
 
 class ModelConfig(BaseModel):
     provider: str = "openai"
-    model: str = "gpt-4o-mini"
+    model: str = "gpt-5-mini"
     temperature: float = 0.0
     top_p: float = 1.0
     seed: Optional[int] = None
