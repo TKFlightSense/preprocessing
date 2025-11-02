@@ -24,8 +24,8 @@ def prompt_hash(system: str, user: str, model: str) -> str:
 
 
 def _is_transient(e: Exception) -> bool:
-    
-# For errors 429 and 5xx
+
+    # For errors 429 and 5xx
 
     if isinstance(e, httpx.HTTPStatusError):
         code = e.response.status_code
@@ -95,7 +95,11 @@ class OpenAIClient:
                     err = (detail or {}).get("error", {})
                     param = err.get("param")
                     code = err.get("code")
-                    if code == "unsupported_value" and param in {"temperature", "top_p", "seed"}:
+                    if code == "unsupported_value" and param in {
+                        "temperature",
+                        "top_p",
+                        "seed",
+                    }:
                         trimmed = dict(body)
                         trimmed.pop(param, None)
                         alt_same = client.post(url, headers=headers, json=trimmed)
@@ -114,7 +118,8 @@ class OpenAIClient:
                 # Optional fallback: if the server indicates Chat Completions is not supported,
                 # try the Responses API with a simple string input.
                 if resp.status_code == 400 and (
-                    "not supported" in msg.lower() or "use the responses api" in msg.lower()
+                    "not supported" in msg.lower()
+                    or "use the responses api" in msg.lower()
                 ):
                     alt_url = f"{base}/responses"
                     alt_body: Dict[str, Any] = {
@@ -141,7 +146,9 @@ class OpenAIClient:
                     # Responses API: best-effort extraction of text and usage
                     content = (
                         (data.get("output") or {}).get("text")
-                        or (data.get("choices") or [{}])[0].get("message", {}).get("content")
+                        or (data.get("choices") or [{}])[0]
+                        .get("message", {})
+                        .get("content")
                         or alt.text
                     )
                     usage = data.get("usage", {})
